@@ -12,13 +12,14 @@ import time
 import pymysql
 import datetime
 import pin_sql
+import get_job_id
 
 global work_exp
 work_exp = ['初中及以下','中专','中技','高中','大专','本科','硕士','博士']
-
+global all_job_id
+all_job_id = []
 
 def get_one_page(key,page,header,date,table_name,db):
-
 	url = 'https://search.51job.com/list/000000,000000,0000,00,9,99,' + key + ',2,' + str(page) + '.html'
 	res = requests.get(url,headers = header).content.decode('gbk')
 	soup = BeautifulSoup(res,'lxml')
@@ -28,15 +29,21 @@ def get_one_page(key,page,header,date,table_name,db):
 	page_count = int(p.findall(page_count)[0])
 	for h in tags:
 		if "https://jobs.51job.com"in h['href']:
-			job_dic = get_detail_page(h['href'],date)
-			operate_and_save(job_dic,table_name,db)
-			time.sleep(0.1)
+			job_id = h['href'][h['href'].rfind("/") + 1:h['href'].rfind(".")]
+			if int(job_id) not in all_job_id :
+				job_dic = get_detail_page(h['href'],date)
+				operate_and_save(job_dic,table_name,db)
+				time.sleep(0.1)
+			else:
+				print("----发现重复job_id----")
+				continue
 		else:
 			continue
 	return page_count
 
 
 def get_detail_page(href,date):
+	global all_job_id
 	print(href)
 	try:
 		res = requests.get(href).text
@@ -45,6 +52,7 @@ def get_detail_page(href,date):
 	job_dic = {}
 	soup = BeautifulSoup(res,"lxml")
 	job_dic['job_id'] = href[href.rfind('/')+1:href.rfind('.')]
+	all_job_id.append(int(job_dic['job_id']))
 	job_dic['job_name'] = soup.select("div.cn  h1")[0].text.strip().replace('\t','')
 	results = job_classify(job_dic['job_name'])
 	job_dic['job_function'] = results['function']
@@ -253,9 +261,11 @@ def pre_data(date):
 
 
 def main(key_word,page):
+	global all_job_id
 	date = datetime.date.today().strftime("%Y%m%d")
 	f_date = datetime.date.today().strftime("%Y-%m-%d")
 	table_name,db = pre_data(date)
+	all_job_id = get_job_id.get_job_id(table_name)
 	header = {
 		'User-Agent':'Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/67.0.3396.99 Safari/537.36',
 		'Connection':'close'
